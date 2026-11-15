@@ -462,6 +462,17 @@ export class LocalStore implements Store {
     return { requesterId: friendship.requesterId, accepted: false };
   }
 
+  /** Cancels an outgoing request, declines an incoming one or unfriends. */
+  async removeFriendship(friendshipId: string, userId: string) {
+    const friendship = this.db.friendships.find((f) => f.id === friendshipId);
+    if (!friendship) throw new Error('Friend request not found');
+    if (friendship.requesterId !== userId && friendship.addresseeId !== userId) {
+      throw new Error('Not allowed');
+    }
+    this.db.friendships = this.db.friendships.filter((f) => f.id !== friendshipId);
+    this.save();
+  }
+
   async listFriends(userId: string) {
     const ids = new Set<string>();
     for (const f of this.db.friendships) {

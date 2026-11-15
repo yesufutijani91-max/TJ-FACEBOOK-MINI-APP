@@ -125,6 +125,7 @@ export interface Store {
   friendState(viewerId: string, otherId: string): Promise<FriendState>;
   sendFriendRequest(fromId: string, toId: string): Promise<FriendState>;
   respondFriendRequest(friendshipId: string, userId: string, accept: boolean): Promise<{ requesterId: string; accepted: boolean }>;
+  removeFriendship(friendshipId: string, userId: string): Promise<void>;
   listFriends(userId: string): Promise<User[]>;
   listFriendRequests(userId: string): Promise<{ incoming: FriendRequestView[]; outgoing: FriendRequestView[] }>;
   countFriends(userId: string): Promise<number>;

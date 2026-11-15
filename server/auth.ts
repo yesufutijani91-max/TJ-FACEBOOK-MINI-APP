@@ -156,7 +156,6 @@ export function attachUser(store: Store) {
         if (user && !user.suspended) {
           req.user = user;
           req.session = session;
-          void store.touchUser(user.id);
         }
       }
       next();

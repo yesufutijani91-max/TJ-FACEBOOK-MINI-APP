@@ -450,6 +450,20 @@ export class SupabaseStore implements Store {
     return { requesterId: friendship.requester_id, accepted: false };
   }
 
+  /** Cancels an outgoing request, declines an incoming one or unfriends. */
+  async removeFriendship(friendshipId: string, userId: string) {
+    const rows = await this.maybe<Row[]>(
+      this.db.from('friendships').select('*').eq('id', friendshipId).limit(1),
+      [],
+    );
+    const friendship = rows[0];
+    if (!friendship) throw new Error('Friend request not found');
+    if (friendship.requester_id !== userId && friendship.addressee_id !== userId) {
+      throw new Error('Not allowed');
+    }
+    await this.run(this.db.from('friendships').delete().eq('id', friendshipId));
+  }
+
   async listFriends(userId: string) {
     const rows = await this.maybe<Row[]>(
       this.db
