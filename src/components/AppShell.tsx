@@ -45,7 +45,7 @@ function Badge({ count }: { count?: number }) {
   );
 }
 
-export function AppShell() {
+export function AppShell({ children }: { children?: ReactNode }) {
   const { user, badges, theme, toggleTheme, logout } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -157,7 +157,7 @@ export function AppShell() {
         </aside>
 
         <main className="min-h-[calc(100vh-3.5rem)] w-full min-w-0 pb-24 lg:pb-10 lg:pt-5">
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </div>
 
