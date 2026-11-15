@@ -82,6 +82,12 @@ async function pushNotification(
   }
 }
 
+/** Express 5 types route params as string | string[]; normalize to a string. */
+const param = (req: Request, key: string): string => {
+  const value = (req.params as Record<string, string | string[]>)[key];
+  return Array.isArray(value) ? (value[0] ?? '') : String(value ?? '');
+};
+
 const handleSchema = z.string().trim().min(3).max(32).regex(/^[a-z0-9_.]+$/i, 'Use letters, numbers, dot or underscore');
 const contentSchema = z.string().trim().min(1, 'Write something first').max(5000);
 
@@ -256,7 +262,7 @@ export async function createApp() {
     '/api/users/:id',
     handle(async (req, res) => {
       const viewerId = req.user?.id ?? null;
-      const target = await store.getUser(req.params.id);
+      const target = await store.getUser(param(req, 'id'));
       if (!target) throw notFound('This account no longer exists');
       const friendState = viewerId
         ? await store.friendState(viewerId, target.id)
@@ -284,7 +290,7 @@ export async function createApp() {
   app.get(
     '/api/users/:id/posts',
     handle(async (req, res) => {
-      const target = await store.getUser(req.params.id);
+      const target = await store.getUser(param(req, 'id'));
       if (!target) throw notFound('This account no longer exists');
       const viewerId = req.user?.id ?? null;
       const canView =
@@ -311,7 +317,7 @@ export async function createApp() {
     app.get(
       `/api/users/:id/${relation}`,
       handle(async (req, res) => {
-        const target = await store.getUser(req.params.id);
+        const target = await store.getUser(param(req, 'id'));
         if (!target) throw notFound('This account no longer exists');
         const users =
           relation === 'friends'
@@ -353,7 +359,7 @@ export async function createApp() {
     requireAuth,
     rateLimit({ windowMs: 60_000, max: 40 }),
     handle(async (req, res) => {
-      const target = await store.getUser(req.params.id);
+      const target = await store.getUser(param(req, 'id'));
       if (!target) throw notFound('This account no longer exists');
       await store.follow(req.user!.id, target.id);
       await pushNotification(store, {
@@ -372,7 +378,7 @@ export async function createApp() {
     '/api/users/:id/follow',
     requireAuth,
     handle(async (req, res) => {
-      await store.unfollow(req.user!.id, req.params.id);
+      await store.unfollow(req.user!.id, param(req, 'id'));
       res.json({ following: false });
     }),
   );
@@ -382,7 +388,7 @@ export async function createApp() {
     requireAuth,
     rateLimit({ windowMs: 60_000, max: 30 }),
     handle(async (req, res) => {
-      const target = await store.getUser(req.params.id);
+      const target = await store.getUser(param(req, 'id'));
       if (!target) throw notFound('This account no longer exists');
       if (target.id === req.user!.id) throw badRequest('You cannot add yourself');
       const state = await store.sendFriendRequest(req.user!.id, target.id);
@@ -416,7 +422,7 @@ export async function createApp() {
       const parsed = z.object({ accept: z.boolean() }).safeParse(req.body);
       if (!parsed.success) throw badRequest('accept must be a boolean');
       try {
-        const result = await store.respondFriendRequest(req.params.id, req.user!.id, parsed.data.accept);
+        const result = await store.respondFriendRequest(param(req, 'id'), req.user!.id, parsed.data.accept);
         if (result.accepted) {
           await pushNotification(store, {
             userId: result.requesterId,
@@ -439,7 +445,7 @@ export async function createApp() {
     requireAuth,
     handle(async (req, res) => {
       try {
-        await store.removeFriendship(req.params.id, req.user!.id);
+        await store.removeFriendship(param(req, 'id'), req.user!.id);
         res.json({ ok: true });
       } catch (error) {
         throw badRequest((error as Error).message);
@@ -451,8 +457,8 @@ export async function createApp() {
     '/api/users/:id/block',
     requireAuth,
     handle(async (req, res) => {
-      if (req.params.id === req.user!.id) throw badRequest('You cannot block yourself');
-      await store.blockUser(req.user!.id, req.params.id);
+      if (param(req, 'id') === req.user!.id) throw badRequest('You cannot block yourself');
+      await store.blockUser(req.user!.id, param(req, 'id'));
       res.json({ blocked: true });
     }),
   );
@@ -461,7 +467,7 @@ export async function createApp() {
     '/api/users/:id/block',
     requireAuth,
     handle(async (req, res) => {
-      await store.unblockUser(req.user!.id, req.params.id);
+      await store.unblockUser(req.user!.id, param(req, 'id'));
       res.json({ blocked: false });
     }),
   );
@@ -543,7 +549,7 @@ export async function createApp() {
   app.get(
     '/api/posts/:id',
     handle(async (req, res) => {
-      const post = await store.getPostView(req.params.id, req.user?.id ?? null);
+      const post = await store.getPostView(param(req, 'id'), req.user?.id ?? null);
       if (!post) throw notFound('Post not found');
       res.json({ post });
     }),
@@ -553,7 +559,7 @@ export async function createApp() {
     '/api/posts/:id',
     requireAuth,
     handle(async (req, res) => {
-      const existing = await store.getPost(req.params.id);
+      const existing = await store.getPost(param(req, 'id'));
       if (!existing) throw notFound('Post not found');
       if (existing.authorId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
       const parsed = z
@@ -563,8 +569,8 @@ export async function createApp() {
         })
         .safeParse(req.body);
       if (!parsed.success) throw badRequest('Invalid post update');
-      await store.updatePost(req.params.id, parsed.data);
-      const post = await store.getPostView(req.params.id, req.user!.id);
+      await store.updatePost(param(req, 'id'), parsed.data);
+      const post = await store.getPostView(param(req, 'id'), req.user!.id);
       res.json({ post });
     }),
   );
@@ -573,10 +579,10 @@ export async function createApp() {
     '/api/posts/:id',
     requireAuth,
     handle(async (req, res) => {
-      const existing = await store.getPost(req.params.id);
+      const existing = await store.getPost(param(req, 'id'));
       if (!existing) throw notFound('Post not found');
       if (existing.authorId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
-      await store.deletePost(req.params.id);
+      await store.deletePost(param(req, 'id'));
       res.json({ ok: true });
     }),
   );
@@ -586,14 +592,14 @@ export async function createApp() {
     requireAuth,
     rateLimit({ windowMs: 60_000, max: 120 }),
     handle(async (req, res) => {
-      const result = await store.toggleLike(req.params.id, req.user!.id);
+      const result = await store.toggleLike(param(req, 'id'), req.user!.id);
       if (result.liked) {
         await pushNotification(store, {
           userId: result.authorId,
           actorId: req.user!.id,
           type: 'like',
           entityType: 'post',
-          entityId: req.params.id,
+          entityId: param(req, 'id'),
           message: `${req.user!.name} liked your post.`,
         });
       }
@@ -605,7 +611,7 @@ export async function createApp() {
     '/api/posts/:id/save',
     requireAuth,
     handle(async (req, res) => {
-      const result = await store.toggleSave(req.params.id, req.user!.id);
+      const result = await store.toggleSave(param(req, 'id'), req.user!.id);
       res.json(result);
     }),
   );
@@ -615,7 +621,7 @@ export async function createApp() {
     requireAuth,
     rateLimit({ windowMs: 5 * 60_000, max: 30 }),
     handle(async (req, res) => {
-      const original = await store.getPostView(req.params.id, req.user!.id);
+      const original = await store.getPostView(param(req, 'id'), req.user!.id);
       if (!original) throw notFound('Post not found');
       const parsed = z.object({ content: z.string().trim().max(1000).optional() }).safeParse(req.body ?? {});
       const post = await store.createPost({
@@ -639,7 +645,7 @@ export async function createApp() {
   app.get(
     '/api/posts/:id/comments',
     handle(async (req, res) => {
-      res.json({ items: await store.listComments(req.params.id, req.user?.id ?? null) });
+      res.json({ items: await store.listComments(param(req, 'id'), req.user?.id ?? null) });
     }),
   );
 
@@ -652,7 +658,7 @@ export async function createApp() {
         .object({ content: contentSchema, parentId: z.string().uuid().nullable().optional() })
         .safeParse(req.body);
       if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message ?? 'Write a comment');
-      const post = await store.getPost(req.params.id);
+      const post = await store.getPost(param(req, 'id'));
       if (!post) throw notFound('Post not found');
       const comment = await store.createComment({
         postId: post.id,
@@ -679,10 +685,10 @@ export async function createApp() {
     '/api/comments/:id',
     requireAuth,
     handle(async (req, res) => {
-      const comment = await store.getComment(req.params.id);
+      const comment = await store.getComment(param(req, 'id'));
       if (!comment) throw notFound('Comment not found');
       if (comment.authorId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
-      await store.deleteComment(req.params.id);
+      await store.deleteComment(param(req, 'id'));
       res.json({ ok: true });
     }),
   );
@@ -747,9 +753,9 @@ export async function createApp() {
     '/api/stories/:id/view',
     requireAuth,
     handle(async (req, res) => {
-      const story = await store.getStory(req.params.id, req.user!.id);
+      const story = await store.getStory(param(req, 'id'), req.user!.id);
       if (!story) throw notFound('Story expired');
-      await store.viewStory(req.params.id, req.user!.id);
+      await store.viewStory(param(req, 'id'), req.user!.id);
       res.json({ ok: true });
     }),
   );
@@ -758,10 +764,10 @@ export async function createApp() {
     '/api/stories/:id/viewers',
     requireAuth,
     handle(async (req, res) => {
-      const story = await store.getStory(req.params.id, req.user!.id);
+      const story = await store.getStory(param(req, 'id'), req.user!.id);
       if (!story) throw notFound('Story expired');
       if (story.authorId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
-      res.json({ items: await store.listStoryViewers(req.params.id) });
+      res.json({ items: await store.listStoryViewers(param(req, 'id')) });
     }),
   );
 
@@ -771,15 +777,15 @@ export async function createApp() {
     handle(async (req, res) => {
       const parsed = z.object({ emoji: z.string().min(1).max(8) }).safeParse(req.body);
       if (!parsed.success) throw badRequest('Pick an emoji');
-      const story = await store.getStory(req.params.id, req.user!.id);
+      const story = await store.getStory(param(req, 'id'), req.user!.id);
       if (!story) throw notFound('Story expired');
-      const result = await store.reactToStory(req.params.id, req.user!.id, parsed.data.emoji);
+      const result = await store.reactToStory(param(req, 'id'), req.user!.id, parsed.data.emoji);
       await pushNotification(store, {
         userId: result.authorId,
         actorId: req.user!.id,
         type: 'story_reaction',
         entityType: 'story',
-        entityId: req.params.id,
+        entityId: param(req, 'id'),
         message: `${req.user!.name} reacted ${parsed.data.emoji} to your story.`,
       });
       res.json({ ok: true });
@@ -792,7 +798,7 @@ export async function createApp() {
     handle(async (req, res) => {
       const parsed = z.object({ text: z.string().trim().min(1).max(500) }).safeParse(req.body);
       if (!parsed.success) throw badRequest('Write a reply');
-      const story = await store.getStory(req.params.id, req.user!.id);
+      const story = await store.getStory(param(req, 'id'), req.user!.id);
       if (!story) throw notFound('Story expired');
       if (story.authorId === req.user!.id) throw badRequest('You cannot reply to your own story');
       const conversation = await store.getOrCreateConversation(req.user!.id, story.authorId);
@@ -839,7 +845,7 @@ export async function createApp() {
   );
 
   app.get('/api/media/*key', (req, res, next) => {
-    const key = decodeURIComponent(String((req.params as Record<string, string>).key ?? ''));
+    const key = decodeURIComponent(param(req, 'key'));
     const file = resolveLocalUpload(key);
     if (!file) {
       next();
@@ -879,7 +885,7 @@ export async function createApp() {
     '/api/conversations/:id/messages',
     requireAuth,
     handle(async (req, res) => {
-      const conversation = await store.getConversation(req.params.id);
+      const conversation = await store.getConversation(param(req, 'id'));
       if (!conversation) throw notFound('Conversation not found');
       if (conversation.userA !== req.user!.id && conversation.userB !== req.user!.id) throw forbidden();
       const items = await store.listMessages(conversation.id, {
@@ -896,7 +902,7 @@ export async function createApp() {
     requireAuth,
     rateLimit({ windowMs: 60_000, max: 90 }),
     handle(async (req, res) => {
-      const conversation = await store.getConversation(req.params.id);
+      const conversation = await store.getConversation(param(req, 'id'));
       if (!conversation) throw notFound('Conversation not found');
       if (conversation.userA !== req.user!.id && conversation.userB !== req.user!.id) throw forbidden();
       const parsed = z
@@ -938,7 +944,7 @@ export async function createApp() {
     '/api/conversations/:id/read',
     requireAuth,
     handle(async (req, res) => {
-      const conversation = await store.getConversation(req.params.id);
+      const conversation = await store.getConversation(param(req, 'id'));
       if (!conversation) throw notFound('Conversation not found');
       if (conversation.userA !== req.user!.id && conversation.userB !== req.user!.id) throw forbidden();
       await store.markConversationRead(conversation.id, req.user!.id);
@@ -952,7 +958,7 @@ export async function createApp() {
     '/api/conversations/:id/typing',
     requireAuth,
     handle(async (req, res) => {
-      const conversation = await store.getConversation(req.params.id);
+      const conversation = await store.getConversation(param(req, 'id'));
       if (!conversation) throw notFound('Conversation not found');
       if (conversation.userA !== req.user!.id && conversation.userB !== req.user!.id) throw forbidden();
       await store.setTyping(conversation.id, req.user!.id);
@@ -1033,7 +1039,7 @@ export async function createApp() {
   app.get(
     '/api/groups/:id',
     handle(async (req, res) => {
-      const group = await store.getGroup(req.params.id, req.user?.id ?? null);
+      const group = await store.getGroup(param(req, 'id'), req.user?.id ?? null);
       if (!group) throw notFound('Group not found');
       res.json({ group });
     }),
@@ -1043,7 +1049,7 @@ export async function createApp() {
     '/api/groups/:id/join',
     requireAuth,
     handle(async (req, res) => {
-      const group = await store.getGroup(req.params.id, req.user!.id);
+      const group = await store.getGroup(param(req, 'id'), req.user!.id);
       if (!group) throw notFound('Group not found');
       await store.joinGroup(group.id, req.user!.id);
       if (group.ownerId !== req.user!.id) {
@@ -1064,7 +1070,7 @@ export async function createApp() {
     '/api/groups/:id/join',
     requireAuth,
     handle(async (req, res) => {
-      await store.leaveGroup(req.params.id, req.user!.id);
+      await store.leaveGroup(param(req, 'id'), req.user!.id);
       res.json({ joined: false });
     }),
   );
@@ -1072,7 +1078,7 @@ export async function createApp() {
   app.get(
     '/api/groups/:id/members',
     handle(async (req, res) => {
-      res.json({ items: await store.listGroupMembers(req.params.id) });
+      res.json({ items: await store.listGroupMembers(param(req, 'id')) });
     }),
   );
 
@@ -1080,13 +1086,13 @@ export async function createApp() {
     '/api/groups/:id/members/:userId/role',
     requireAuth,
     handle(async (req, res) => {
-      const group = await store.getGroup(req.params.id, req.user!.id);
+      const group = await store.getGroup(param(req, 'id'), req.user!.id);
       if (!group) throw notFound('Group not found');
       const isOwner = group.ownerId === req.user!.id;
       if (!isOwner && group.role !== 'admin') throw forbidden('Only group admins can change roles');
       const parsed = z.object({ role: z.enum(['admin', 'member']) }).safeParse(req.body);
       if (!parsed.success) throw badRequest('Invalid role');
-      await store.setGroupRole(group.id, req.params.userId, parsed.data.role);
+      await store.setGroupRole(group.id, param(req, 'userId'), parsed.data.role);
       res.json({ ok: true });
     }),
   );
@@ -1095,7 +1101,7 @@ export async function createApp() {
     '/api/groups/:id',
     requireAuth,
     handle(async (req, res) => {
-      const group = await store.getGroup(req.params.id, req.user!.id);
+      const group = await store.getGroup(param(req, 'id'), req.user!.id);
       if (!group) throw notFound('Group not found');
       if (group.ownerId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
       await store.deleteGroup(group.id);
@@ -1106,7 +1112,7 @@ export async function createApp() {
   app.get(
     '/api/groups/:id/posts',
     handle(async (req, res) => {
-      const group = await store.getGroup(req.params.id, req.user?.id ?? null);
+      const group = await store.getGroup(param(req, 'id'), req.user?.id ?? null);
       if (!group) throw notFound('Group not found');
       if (group.privacy === 'private' && !group.isMember) throw forbidden('Join the group to read its posts');
       const page = await store.listFeed({
@@ -1163,7 +1169,7 @@ export async function createApp() {
   app.get(
     '/api/listings/:id',
     handle(async (req, res) => {
-      const listing = await store.getListing(req.params.id);
+      const listing = await store.getListing(param(req, 'id'));
       if (!listing) throw notFound('Listing not found');
       res.json({ listing });
     }),
@@ -1173,7 +1179,7 @@ export async function createApp() {
     '/api/listings/:id',
     requireAuth,
     handle(async (req, res) => {
-      const listing = await store.getListing(req.params.id);
+      const listing = await store.getListing(param(req, 'id'));
       if (!listing) throw notFound('Listing not found');
       if (listing.sellerId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
       const parsed = z
@@ -1196,7 +1202,7 @@ export async function createApp() {
     '/api/listings/:id',
     requireAuth,
     handle(async (req, res) => {
-      const listing = await store.getListing(req.params.id);
+      const listing = await store.getListing(param(req, 'id'));
       if (!listing) throw notFound('Listing not found');
       if (listing.sellerId !== req.user!.id && !req.user!.isAdmin) throw forbidden();
       await store.deleteListing(listing.id);
@@ -1277,8 +1283,8 @@ export async function createApp() {
     handle(async (req, res) => {
       const parsed = z.object({ suspended: z.boolean() }).safeParse(req.body);
       if (!parsed.success) throw badRequest('suspended must be a boolean');
-      if (req.params.id === req.user!.id) throw badRequest('You cannot suspend your own account');
-      const user = await store.updateUser(req.params.id, { suspended: parsed.data.suspended });
+      if (param(req, 'id') === req.user!.id) throw badRequest('You cannot suspend your own account');
+      const user = await store.updateUser(param(req, 'id'), { suspended: parsed.data.suspended });
       res.json({ user });
     }),
   );
@@ -1305,7 +1311,7 @@ export async function createApp() {
     handle(async (req, res) => {
       const parsed = z.object({ status: z.enum(['resolved', 'dismissed']) }).safeParse(req.body);
       if (!parsed.success) throw badRequest('Invalid status');
-      await store.resolveReport(req.params.id, req.user!.id, parsed.data.status);
+      await store.resolveReport(param(req, 'id'), req.user!.id, parsed.data.status);
       res.json({ ok: true });
     }),
   );
@@ -1314,7 +1320,7 @@ export async function createApp() {
     '/api/admin/posts/:id',
     requireAdmin,
     handle(async (req, res) => {
-      await store.deletePost(req.params.id);
+      await store.deletePost(param(req, 'id'));
       res.json({ ok: true });
     }),
   );
@@ -1331,7 +1337,7 @@ export async function createApp() {
     '/api/admin/groups/:id',
     requireAdmin,
     handle(async (req, res) => {
-      await store.deleteGroup(req.params.id);
+      await store.deleteGroup(param(req, 'id'));
       res.json({ ok: true });
     }),
   );
