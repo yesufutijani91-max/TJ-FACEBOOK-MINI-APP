@@ -478,6 +478,9 @@ test('media uploads are stored and served back', async () => {
   const served = await fetch(base + url);
   assert.equal(served.status, 200);
   assert.match(served.headers.get('content-type') ?? '', /image\/png/);
+  // Drain the body so the keep-alive socket is released and the run can exit.
+  const body = Buffer.from(await served.arrayBuffer());
+  assert.equal(body.length, png.length, 'the stored file should be served back byte for byte');
 
   const rejected = await api('/api/media', {
     method: 'POST',
