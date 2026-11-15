@@ -21,7 +21,7 @@ interface SessionState {
   settings: AppSettings | null;
   badges: { notifications: number; messages: number };
   loginWithTelegram: () => Promise<void>;
-  loginAsGuest: () => Promise<void>;
+  loginAsGuest: (name?: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
   refreshBadges: () => Promise<void>;
@@ -104,11 +104,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     applyAuth(result);
   }, [applyAuth]);
 
-  const loginAsGuest = useCallback(async () => {
-    const prefill = telegramUser()?.first_name;
-    const result = await api.loginGuest(prefill);
-    applyAuth(result);
-  }, [applyAuth]);
+  const loginAsGuest = useCallback(
+    async (name?: string) => {
+      const prefill = name?.trim() || telegramUser()?.first_name;
+      const result = await api.loginGuest(prefill);
+      applyAuth(result);
+    },
+    [applyAuth],
+  );
 
   const refreshSession = useCallback(async () => {
     const session = await api.session();

@@ -15,7 +15,7 @@ export default function GroupDetailPage() {
   const { user, toast } = useSession();
   const [group, setGroup] = useState<Group | null>(null);
   const [posts, setPosts] = useState<PostView[]>([]);
-  const [members, setMembers] = useState<User[]>([]);
+  const [members, setMembers] = useState<{ user: User; role: 'owner' | 'admin' | 'member' }[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -150,7 +150,7 @@ export default function GroupDetailPage() {
               placeholder={`Share something with ${group.name}…`}
               onCreated={(post) => {
                 setPosts((current) => [post, ...current]);
-                setGroup((current) => (current ? { ...current, postCount: current.postCount + 1 } : current));
+                setGroup((current) => (current ? { ...current } : current));
               }}
             />
             {posts.length === 0 ? (
@@ -195,23 +195,23 @@ export default function GroupDetailPage() {
       ) : (
         <div className="card divide-y divide-[var(--border-subtle)]">
           {members.map((member) => {
-            const role = group.role && member.id === user?.id ? group.role : undefined;
+            const person = member.user;
             return (
-              <div key={member.id} className="flex items-center gap-2.5 p-3">
-                <Link to={`/u/${member.id}`}>
-                  <Avatar user={member} size={40} />
+              <div key={person.id} className="flex items-center gap-2.5 p-3">
+                <Link to={`/u/${person.id}`}>
+                  <Avatar user={person} size={40} />
                 </Link>
                 <div className="min-w-0 flex-1">
-                  <Link to={`/u/${member.id}`} className="block truncate text-sm font-semibold text-strong hover:underline">
-                    {member.name}
+                  <Link to={`/u/${person.id}`} className="block truncate text-sm font-semibold text-strong hover:underline">
+                    {person.name}
                   </Link>
                   <p className="truncate text-xs text-soft">
-                    @{member.handle}
-                    {role === 'owner' ? ' · Owner' : ''}
+                    @{person.handle}
+                    {member.role === 'owner' ? ' · Owner' : member.role === 'admin' ? ' · Admin' : ''}
                   </p>
                 </div>
-                {isAdmin && member.id !== user?.id && (
-                  <button className="btn btn-ghost px-2.5 py-1 text-xs" onClick={() => void setRole(member.id, 'admin')}>
+                {isAdmin && person.id !== user?.id && member.role !== 'owner' && (
+                  <button className="btn btn-ghost px-2.5 py-1 text-xs" onClick={() => void setRole(person.id, 'admin')}>
                     <Icon name="shield" size={14} /> Make admin
                   </button>
                 )}

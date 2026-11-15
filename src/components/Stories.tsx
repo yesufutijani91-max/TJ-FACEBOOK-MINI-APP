@@ -57,7 +57,7 @@ function StoryComposer({ open, onClose, onCreated }: { open: boolean; onClose: (
         mediaUrl: mode === 'media' ? media?.url : null,
         mediaType: mode === 'media' ? media?.type : null,
         caption: caption.trim(),
-        background: mode === 'text' ? background : null,
+        background: mode === 'text' ? background : undefined,
       });
       setCaption('');
       setText('');

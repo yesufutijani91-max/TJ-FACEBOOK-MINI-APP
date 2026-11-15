@@ -73,12 +73,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const data = text ? safeJson(text) : null;
 
   if (!response.ok) {
-    const message =
-      (data && typeof data === 'object' && 'error' in data && String((data as { error: unknown }).error)) ||
-      `Request failed (${response.status})`;
+    const message = extractError(data) ?? `Request failed (${response.status})`;
     throw new ApiError(message, response.status);
   }
   return data as T;
+}
+
+function extractError(data: unknown): string | null {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const value = (data as { error: unknown }).error;
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
 }
 
 function safeJson(text: string): unknown {
