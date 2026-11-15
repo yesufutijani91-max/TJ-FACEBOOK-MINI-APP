@@ -208,13 +208,20 @@ export async function createApp() {
         });
         return;
       }
+      // The name is optional: the app signs visitors in as a guest automatically
+      // outside Telegram, so a missing name must not fail with a validation error.
       const parsed = z
-        .object({ name: z.string().trim().min(2).max(40), handle: handleSchema.optional() })
-        .safeParse(req.body);
+        .object({
+          name: z.string().trim().min(2).max(40).optional(),
+          handle: handleSchema.optional(),
+        })
+        .safeParse(req.body ?? {});
       if (!parsed.success) throw badRequest('Enter a display name of at least 2 characters');
-      const handle = await ensureHandle(parsed.data.handle ?? parsed.data.name);
+      const displayName =
+        parsed.data.name ?? `Guest ${Math.floor(1000 + Math.random() * 9000)}`;
+      const handle = await ensureHandle(parsed.data.handle ?? displayName);
       const user = await store.createUser({
-        name: parsed.data.name,
+        name: displayName,
         handle,
         isAdmin: isAdminIdentity({ telegramId: null, handle }),
       });
