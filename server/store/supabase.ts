@@ -246,7 +246,6 @@ export class SupabaseStore implements Store {
     if (patch.name !== undefined) userColumns.name = patch.name;
     if (patch.username !== undefined) userColumns.username = patch.username;
     if (patch.avatarUrl !== undefined) userColumns.avatar_url = patch.avatarUrl;
-    if (patch.telegramId !== undefined) userColumns.telegram_id = patch.telegramId;
     if (patch.handle !== undefined) userColumns.handle = await this.uniqueHandle(patch.handle, id);
     if (patch.coverUrl !== undefined) profileColumns.cover_url = patch.coverUrl;
     if (patch.bio !== undefined) profileColumns.bio = patch.bio;
