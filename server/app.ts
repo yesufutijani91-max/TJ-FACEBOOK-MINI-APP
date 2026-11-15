@@ -845,7 +845,9 @@ export async function createApp() {
   );
 
   app.get('/api/media/*key', (req, res, next) => {
-    const key = decodeURIComponent(param(req, 'key'));
+    // Express 5 exposes a named wildcard as an array of path segments.
+    const raw = (req.params as Record<string, string | string[]>).key;
+    const key = decodeURIComponent(Array.isArray(raw) ? raw.join('/') : String(raw ?? ''));
     const file = resolveLocalUpload(key);
     if (!file) {
       next();

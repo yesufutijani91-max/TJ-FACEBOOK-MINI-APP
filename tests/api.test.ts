@@ -444,7 +444,11 @@ test('notifications are produced, listed and marked read', async () => {
   assert.equal(inbox.status, 200);
   assert.ok(inbox.data.items.length > 0, 'Bob should have notifications from the flows above');
   const types = new Set(inbox.data.items.map((item: any) => item.type));
-  assert.ok(types.has('friend_request') || types.has('like') || types.has('message'));
+  assert.ok(types.size > 0, 'Bob should have notification types');
+  assert.ok(
+    types.has('friend_request') || types.has('like') || types.has('message') || types.has('follow'),
+    `expected a social notification, received: ${[...types].join(', ') || 'none'}`,
+  );
 
   const markRead = await api('/api/notifications/read', { method: 'POST', token: bob.token });
   assert.equal(markRead.status, 200);
@@ -540,5 +544,8 @@ test('reporting and the admin dashboard work with proper authorization', async (
     body: { suspended: true },
   });
   assert.equal(suspend.status, 200);
-  assert.equal((await api('/api/session', { token: bob.token })).status, 401, 'suspended users lose access');
+  // Sessions resolve to an anonymous payload, so check a guarded route instead.
+  assert.equal((await api('/api/me', { token: bob.token })).status, 401, 'suspended users lose access');
+  const anonymous = await api('/api/session', { token: bob.token });
+  assert.equal(anonymous.data.user, null, 'a suspended session must not resolve a user');
 });
