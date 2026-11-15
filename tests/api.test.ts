@@ -459,7 +459,10 @@ test('notifications are produced, listed and marked read', async () => {
   const markRead = await api('/api/notifications/read', { method: 'POST', token: bob.token });
   assert.equal(markRead.status, 200);
   const after = await api('/api/notifications', { token: bob.token });
-  assert.ok(after.data.items.every((item: any) => item.read));
+  assert.ok(
+    after.data.items.every((item: any) => item.readAt),
+    'marking notifications read should stamp readAt on every item',
+  );
 
   const badges = await api('/api/badges', { token: bob.token });
   assert.equal(badges.status, 200);

@@ -1302,11 +1302,7 @@ export class LocalStore implements Store {
       .filter((n) => n.userId === userId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
-      .map((n) => ({
-        ...n,
-        read: Boolean(n.readAt),
-        actor: n.actorId ? this.findUser(n.actorId) : null,
-      }));
+      .map((n) => ({ ...n, actor: n.actorId ? this.findUser(n.actorId) : null }));
   }
 
   async markNotificationsRead(userId: string) {
