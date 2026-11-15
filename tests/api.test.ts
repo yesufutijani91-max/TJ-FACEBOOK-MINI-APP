@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -37,8 +37,10 @@ const server: Server = await new Promise((resolve) => {
   const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
 });
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+// The tests drive the server explicitly; unref keeps the runner from waiting on it.
+server.unref();
 
-test.after(() => {
+after(() => {
   // Destroy keep-alive sockets so the test runner can exit promptly.
   server.closeAllConnections?.();
   server.close();
@@ -398,6 +400,24 @@ test('marketplace: publish, browse, search and contact the seller', async () => 
 
 test('search and discovery return people, posts, groups and listings', async () => {
   await api('/api/posts', { method: 'POST', token: alice.token, body: { content: 'Searchable zebra post' } });
+  const group = await api('/api/groups', {
+    method: 'POST',
+    token: alice.token,
+    body: { name: 'Zebra Design Lab', description: 'A home for zebra enthusiasts', privacy: 'public' },
+  });
+  assert.equal(group.status, 201);
+  const listing = await api('/api/listings', {
+    method: 'POST',
+    token: alice.token,
+    body: {
+      title: 'Zebra print camera strap',
+      description: 'Handmade strap in zebra print.',
+      priceCents: 2500,
+      category: 'Electronics',
+      location: 'Berlin',
+    },
+  });
+  assert.equal(listing.status, 201);
 
   const people = await api('/api/search?q=Alice', { token: bob.token });
   assert.equal(people.status, 200);
@@ -406,11 +426,11 @@ test('search and discovery return people, posts, groups and listings', async () 
   const posts = await api('/api/search?q=zebra', { token: bob.token });
   assert.ok(posts.data.posts.length >= 1);
 
-  const groups = await api('/api/search?q=Design', { token: bob.token });
-  assert.ok(groups.data.groups.length >= 1);
+  const groups = await api('/api/search?q=zebra', { token: bob.token });
+  assert.ok(groups.data.groups.some((item: any) => item.id === group.data.group.id));
 
-  const listings = await api('/api/search?q=camera', { token: bob.token });
-  assert.ok(listings.data.listings.length >= 1);
+  const listings = await api('/api/search?q=zebra', { token: bob.token });
+  assert.ok(listings.data.listings.some((item: any) => item.id === listing.data.listing.id));
 
   const trending = await api('/api/trending', { token: bob.token });
   assert.equal(trending.status, 200);
