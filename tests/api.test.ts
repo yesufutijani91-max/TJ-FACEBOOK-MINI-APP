@@ -66,7 +66,13 @@ async function api<T = any>(
     body = JSON.stringify(options.body);
   }
   if (options.token) headers.authorization = `Bearer ${options.token}`;
-  const response = await fetch(base + route, { method: options.method ?? 'GET', headers, body });
+  const response = await fetch(base + route, {
+    method: options.method ?? 'GET',
+    headers,
+    body,
+    // Fail loudly instead of stalling the whole suite on a wedged request.
+    signal: AbortSignal.timeout(15000),
+  });
   const text = await response.text();
   let data: unknown = text;
   try {
@@ -475,7 +481,7 @@ test('media uploads are stored and served back', async () => {
   const url: string = upload.data.url;
   assert.ok(url, 'upload should return a public URL');
 
-  const served = await fetch(base + url);
+  const served = await fetch(base + url, { signal: AbortSignal.timeout(15000) });
   assert.equal(served.status, 200);
   assert.match(served.headers.get('content-type') ?? '', /image\/png/);
   // Drain the body so the keep-alive socket is released and the run can exit.
