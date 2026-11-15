@@ -31,14 +31,6 @@ function LoadingScreen({ label = 'Loading' }: { label?: string }) {
   );
 }
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useSession();
-  const location = useLocation();
-  if (loading) return <LoadingScreen label="Signing in" />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  return <>{children}</>;
-}
-
 function AdminOnly({ children }: { children: React.ReactNode }) {
   const { user } = useSession();
   if (!user?.isAdmin) return <Navigate to="/" replace />;
@@ -115,9 +107,8 @@ function AppRoutes() {
 }
 
 export default function App() {
-  return (
-    <RequireAuth>
-      <AppRoutes />
-    </RequireAuth>
-  );
+  // AppRoutes already handles the loading state and renders the login routes for
+  // signed-out visitors. Wrapping it in a redirect guard made <Navigate> fire on
+  // every render at /login, which looped until React abandoned the tree (blank app).
+  return <AppRoutes />;
 }
