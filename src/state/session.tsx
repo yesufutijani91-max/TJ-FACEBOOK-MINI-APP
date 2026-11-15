@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { AppSettings, FeatureFlags, SessionInfo, User } from '../../shared/types';
 import { api, ApiError, tokenStore, type AuthResult } from '../lib/api';
-import { bootTelegram, initDataRaw, isTelegram, telegramUser } from '../lib/telegram';
+import { bootTelegram, initDataRaw, isTelegram, loadTelegramSdk, telegramUser } from '../lib/telegram';
 
 interface SessionState {
   user: User | null;
@@ -124,9 +124,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
-    const cleanupTelegram = bootTelegram();
+    let cleanupTelegram: () => void = () => {};
 
     (async () => {
+      // The SDK is loaded asynchronously; wait briefly so Telegram sign-in works
+      // while a blocked telegram.org never holds up first paint.
+      await loadTelegramSdk();
+      cleanupTelegram = bootTelegram();
       try {
         const session = await api.session();
         setInfo(session);
@@ -153,7 +157,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    return cleanupTelegram;
+    return () => cleanupTelegram();
   }, [loginAsGuest, loginWithTelegram]);
 
   useEffect(() => {
