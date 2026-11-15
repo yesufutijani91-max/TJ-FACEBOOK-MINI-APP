@@ -554,7 +554,11 @@ test('reporting and the admin dashboard work with proper authorization', async (
   });
   assert.equal(suspend.status, 200);
   // Sessions resolve to an anonymous payload, so check a guarded route instead.
-  assert.equal((await api('/api/me', { token: bob.token })).status, 401, 'suspended users lose access');
+  assert.equal(
+    (await api('/api/notifications', { token: bob.token })).status,
+    401,
+    'suspended users lose access',
+  );
   const anonymous = await api('/api/session', { token: bob.token });
   assert.equal(anonymous.data.user, null, 'a suspended session must not resolve a user');
 });
