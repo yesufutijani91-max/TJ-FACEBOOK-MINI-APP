@@ -39,6 +39,8 @@ const server: Server = await new Promise((resolve) => {
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
 test.after(() => {
+  // Destroy keep-alive sockets so the test runner can exit promptly.
+  server.closeAllConnections?.();
   server.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
@@ -101,7 +103,8 @@ test('guest sign-in creates a persistent session and marks the admin', async () 
 
 test('protected routes reject anonymous callers', async () => {
   assert.equal((await api('/api/posts', { method: 'POST', body: { content: 'hi' } })).status, 401);
-  assert.equal((await api('/api/feed?scope=saved')).status, 401);
+  // Saved posts are a signed-in-only view and answer 403 for guests.
+  assert.equal((await api('/api/feed?scope=saved')).status, 403);
   assert.equal((await api('/api/admin/stats', { token: alice.token })).status, 403);
 });
 
@@ -156,9 +159,10 @@ test('posts: create, read, edit, like, comment, reply, save, share and delete', 
 
   const comments = await api(`/api/posts/${postId}/comments`, { token: bob.token });
   assert.equal(comments.status, 200);
-  assert.equal(comments.data.items.length, 2);
+  assert.equal(comments.data.items.length, 1, 'replies nest under their parent comment');
   const parent = comments.data.items.find((item: any) => item.id === commentId);
   assert.equal(parent.replies.length, 1);
+  assert.equal(parent.replies[0].content, 'Thanks Bob');
 
   const saved = await api(`/api/posts/${postId}/save`, { method: 'POST', token: bob.token });
   assert.equal(saved.status, 200);
@@ -193,7 +197,7 @@ test('friendships: request, accept, list and unfriend', async () => {
 
   const incoming = await api('/api/me/friend-requests', { token: bob.token });
   assert.equal(incoming.status, 200);
-  const pending = incoming.data.items.find((item: any) => item.user.id === alice.user.id);
+  const pending = incoming.data.incoming.find((item: any) => item.user.id === alice.user.id);
   assert.ok(pending, 'Bob should see Alice’s request');
 
   const accepted = await api(`/api/friendships/${pending.id}/respond`, {
@@ -214,7 +218,7 @@ test('friendships: request, accept, list and unfriend', async () => {
   const again = await api(`/api/users/${bob.user.id}/friend-request`, { method: 'POST', token: alice.token });
   assert.equal(again.data.status, 'pending_out');
   const incomingAgain = await api('/api/me/friend-requests', { token: bob.token });
-  const pendingAgain = incomingAgain.data.items.find((item: any) => item.user.id === alice.user.id);
+  const pendingAgain = incomingAgain.data.incoming.find((item: any) => item.user.id === alice.user.id);
   await api(`/api/friendships/${pendingAgain.id}/respond`, {
     method: 'POST',
     token: bob.token,
@@ -229,7 +233,9 @@ test('follows and blocking work end to end', async () => {
 
   const profile = await api(`/api/users/${bob.user.id}`, { token: alice.token });
   assert.equal(profile.status, 200);
-  assert.equal(profile.data.profile.user.id, bob.user.id);
+  assert.equal(profile.data.user.id, bob.user.id);
+  assert.equal(profile.data.isFollowing, true);
+  assert.equal(profile.data.friendState.status, 'friends');
 
   const block = await api(`/api/users/${bob.user.id}/block`, { method: 'POST', token: alice.token });
   assert.equal(block.status, 200);
@@ -277,6 +283,8 @@ test('messaging: conversation, message, read receipt and typing indicator', asyn
 });
 
 test('stories: publish, browse, view, react and reply', async () => {
+  // Stories are visible to friends and followed accounts only.
+  await api(`/api/users/${alice.user.id}/follow`, { method: 'POST', token: bob.token });
   const story = await api('/api/stories', {
     method: 'POST',
     token: alice.token,
@@ -488,10 +496,12 @@ test('reporting and the admin dashboard work with proper authorization', async (
   const resolved = await api(`/api/admin/reports/${reportItem.id}/resolve`, {
     method: 'POST',
     token: admin.token,
-    body: { action: 'remove' },
+    body: { status: 'resolved' },
   });
   assert.equal(resolved.status, 200);
 
+  const removed = await api(`/api/admin/posts/${postId}`, { method: 'DELETE', token: admin.token });
+  assert.equal(removed.status, 200);
   const removedPost = await api(`/api/posts/${postId}`);
   assert.equal(removedPost.status, 404, 'moderated content must be removed');
 
