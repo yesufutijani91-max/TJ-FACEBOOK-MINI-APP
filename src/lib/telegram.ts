@@ -74,6 +74,41 @@ declare global {
   }
 }
 
+const SDK_URL = 'https://telegram.org/js/telegram-web-app.js';
+let sdkPromise: Promise<void> | null = null;
+
+/**
+ * Loads the Telegram Web Apps SDK without blocking first paint.
+ *
+ * A blocking <script> in index.html left the app blank whenever telegram.org was
+ * slow or unreachable. This injects the script instead and always resolves —
+ * when the SDK is ready, on error, or after `timeoutMs` — so the UI renders
+ * everywhere and Mini App behaviour simply activates a moment later.
+ */
+export function loadTelegramSdk(timeoutMs = 2500): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (window.Telegram?.WebApp) return Promise.resolve();
+  if (sdkPromise) return sdkPromise;
+
+  sdkPromise = new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const script = document.createElement('script');
+    script.src = SDK_URL;
+    script.async = true;
+    script.onload = done;
+    script.onerror = done;
+    document.head.appendChild(script);
+    window.setTimeout(done, timeoutMs);
+  });
+
+  return sdkPromise;
+}
+
 export const webApp = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
 
 export const isTelegram = (): boolean => Boolean(webApp()?.initData);
