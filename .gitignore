@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-server
+data
+uploads
+.env
+.env.local
+*.log
+.DS_Store
+coverage
+tests/.tmp
